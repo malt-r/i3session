@@ -1,5 +1,3 @@
-#!/usr/bin/env python2
-
 import os
 import i3
 import sys
@@ -9,10 +7,31 @@ import logging
 from time import sleep
 from xdg.BaseDirectory import *
 
+
 class Node:
-    def __init__(self, data, parent = None):
-        self.data = data
-        self.parent = parent
+    def __init__(self, data, parent=None):
+        self._data = data
+        self._parent = parent
+        
+    @property
+    def parent(self):
+        """I'm the 'parent' property."""
+        return self._parent
+
+
+    @parent.setter
+    def parent(self, value):
+        self._parent = value
+        
+    @property
+    def data(self):
+        """I'm the 'data' property."""
+        return self._data
+
+
+    @data.setter
+    def data(self, value):
+        self._data = value
 
     def __str__(self):
         dictionary = {
@@ -29,14 +48,6 @@ class Node:
         return str(self.__class__) + str(dictionary)
 
     @property
-    def data(self):
-        return self.data
-
-    @property
-    def parent(self):
-        return self.parent
-
-    @property
     def children(self):
         return self.data['nodes']
 
@@ -46,11 +57,11 @@ class Node:
     # xprop WM_CLASS -id ID
     def get_wm_class(self):
         output = subprocess.check_output(["xprop", "WM_CLASS", "-id", str(self.data['window'])])
-        return output.split()[3].strip('"').lower()
+        return output.split()[3].strip(b'"').lower()
 
     def restore(self):
         # Use orientation of parent container
-        if self.parent and self.parent.data['orientation']!='none':
+        if self.parent and self.parent.data['orientation'] != 'none':
             logging.debug("orientation is now %s", self.parent.data['orientation'])
             i3.command('split', self.parent.data['orientation'])
 
@@ -64,16 +75,20 @@ class Node:
         elif isinstance(self, Client):
             # Start this process
             logging.debug("exec %s", self.data['process'])
-            i3.command('exec', self.data['process'])
+            i3.command('exec', self.data['process'].decode("utf-8"))
             Tree.sleep_until_changed()
             i3.command('focus', 'parent')
             Tree.sleep_until_changed()
         elif isinstance(self, Container):
             pass
-            
 class Workspace(Node): pass
+
+
 class Client(Node): pass
+
+
 class Container(Node): pass
+
 
 class Tree():
     CHANGE_TIMEOUT = 0.2
@@ -89,25 +104,25 @@ class Tree():
             # Window ID is set for this client
             elif n['window']:
                 # get process from xprop
-                node = Node(n) 
+                node = Node(n)
                 n[u'process'] = node.get_wm_class()
 
         return nodes
 
     # set up workspaces, exec clients
     @classmethod
-    def restore(self, nodes, parent = None, only_workspace = None):
+    def restore(self, nodes, parent=None, only_workspace=None):
         for n in nodes:
             if 'num' in n:
-                node = Workspace(n, parent) 
+                node = Workspace(n, parent)
             elif 'process' in n:
-                node = Client(n, parent) 
+                node = Client(n, parent)
             else:
-                node = Container(n, parent) 
+                node = Container(n, parent)
 
             logging.debug(node)
             node.restore()
-            
+
             # Recurse subtree
             if node.has_children() == True:
                 if only_workspace and isinstance(node, Workspace) and str(node.data['num']) != only_workspace:
@@ -127,13 +142,16 @@ class Tree():
             if original_tree != i3.get_tree():
                 break
 
+
 # use i3-nagbar to show a message while restoring
 def nag_bar_process():
     return subprocess.Popen(["i3-nagbar", "-m", "Currently restoring session. Don't change workspace focus!"])
 
+
 # print usage instructions
 def show_help():
     print(sys.argv[0] + " <save|restore> [workspace]")
+
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
@@ -152,24 +170,24 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if sys.argv[1] == 'save':
-        print "Saving..."
+        print("Saving...")
         session = i3.get_tree()
 
         # traverse tree and assign node processes before storing
         if session['nodes']:
-            session['nodes'] = Tree.assign_processes(session['nodes']) 
+            session['nodes'] = Tree.assign_processes(session['nodes'])
 
         pickle.dump(session, open(config_file, "wb"))
-        print "Session saved to " + config_file
+        print("Session saved to " + config_file)
     elif sys.argv[1] == 'restore':
         nag_bar = nag_bar_process()
-        print "Restoring..."
+        print("Restoring...")
 
         # load session from file
         try:
             session = pickle.load(open(config_file, "rb"))
         except Exception:
-            print "Can't restore saved session..."
+            print("Can't restore saved session...")
             sys.exit(1)
 
         # traverse tree and send commands to i3 based on what was saved
@@ -177,10 +195,10 @@ if __name__ == '__main__':
             if len(sys.argv) > 2:
                 Tree.restore(session['nodes'], None, sys.argv[2])
             else:
-                Tree.restore(session['nodes']) 
+                Tree.restore(session['nodes'])
 
         nag_bar.terminate()
-        print "Session restored from " + config_file
+        print("Session restored from " + config_file)
     else:
         show_help()
         sys.exit(1)
