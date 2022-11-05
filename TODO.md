@@ -1,0 +1,2 @@
+- integrate tmux sessionizer
+- fix creating of multiple footers
